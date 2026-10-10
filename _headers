@@ -1,0 +1,86 @@
+# ===== Cloudflare Pages: _headers =====
+# Cabeceras HTTP del sitio. Cloudflare Pages lee este archivo automaticamente
+# (no se publica como asset). Formato: la ruta en una linea, luego las
+# cabeceras indentadas.
+#
+# Nota: Cloudflare YA envia por defecto, en cada asset,
+#   Access-Control-Allow-Origin: *
+#   X-Content-Type-Options: nosniff
+#   Referrer-Policy: strict-origin-when-cross-origin
+# Los repetimos aqui de forma explicita para que esto siga funcionando igual
+# si Cloudflare cambiara esos valores por defecto.
+
+# --- Imagenes: cache de 7 dias ---
+# Cloudflare por defecto manda "max-age=0, must-revalidate" en todo asset, asi
+# que cada imagen obliga a una ida y vuelta al servidor. Con esto el navegador
+# la guarda una semana. Es a proposito 7 dias y no 1 ano: si reemplazas una
+# imagen conservando el nombre, los visitantes ven la nueva como maximo en 7 dias.
+# El splat inicial (/*.png) cubre cualquier profundidad de carpeta.
+/*.png
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+/*.jpg
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+/*.jpeg
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+/*.webp
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+/*.gif
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+/*.svg
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+/*.ico
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+  X-Content-Type-Options: nosniff
+
+# --- CSS / JS: cache corta ---
+# Solo 1 hora: si editas styles.css, el cambio llega rapido a los visitantes.
+/*.css
+  Cache-Control: public, max-age=3600
+  X-Content-Type-Options: nosniff
+
+/*.js
+  Cache-Control: public, max-age=3600
+  X-Content-Type-Options: nosniff
+
+# --- Fuentes (si algun dia se anaden) ---
+/*.woff2
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+
+/*.woff
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+
+/*.ttf
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+
+# --- Catch-all: seguridad para TODO el sitio ---
+# Va al final para que, si Cloudflare resolviera "gana la primera regla",
+# nunca tape las reglas de cache de arriba.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: blob: https://cdn.cloudflare.steamstatic.com https://cdn.gameseal.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.supabase.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; font-src 'self' data:; form-action 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests

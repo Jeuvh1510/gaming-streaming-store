@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CSP: permite las imagenes locales del dominio, la CDN de Steam y la de
+         GameSeal. La version completa (con frame-ancestors, que en <meta> se
+         ignora) vive en el archivo _headers que Cloudflare Pages lee. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://cdn.cloudflare.steamstatic.com https://cdn.gameseal.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.supabase.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co; font-src 'self' data:; object-src 'none'; base-uri 'self';">
+    <title>G&amp;S STORE - Tienda</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Supabase Auth: cuentas, sesiones y verificacion de correo -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="slider">
+        <div class="slides" id="slides"></div>
+        <div class="slider-overlay">
+            <div class="slider-content">
+                <h1 id="slideTitle"></h1>
+                <p id="slideDescription"></p>
+            </div>
+            <div class="slider-controls">
+                <button class="control prev" id="prevBtn" aria-label="Anterior">&#10094;</button>
+                <button class="control next" id="nextBtn" aria-label="Siguiente">&#10095;</button>
+            </div>
+            <div class="dots" id="dots"></div>
+        </div>
+    </div>
+
+    <!-- Botones de inicio de sesión y carrito (esquina superior derecha) -->
+    <div class="top-buttons">
+                <button class="cart-btn account-btn" type="button" id="openAuthBtn">
+            <span id="accountIcon">🔐</span>
+            <span id="accountLabel">Iniciar sesión</span>
+        </button>
+        <button class="cart-btn" type="button" id="openCartBtn">
+            <img src="cart_icon.png" alt="Carrito" class="cart-icon">
+            <span>Carrito</span>
+            <span id="cartCount">0</span>
+        </button>
+    </div>
+
+    <!-- Catálogo de Steam -->
+    <section class="steam-catalog-section">
+        <div class="catalog-header">
+            <h2>Catálogo de Steam</h2>
+            <p>Descubre juegos destacados con una vista rápida y elegante.</p>
+        </div>
+        <div class="catalog-grid" id="steamCatalog"></div>
+    </section>
+
+    <!-- Catálogo de Giftcards -->
+    <section class="steam-catalog-section">
+        <div class="catalog-header">
+            <h2>🎁 Giftcards</h2>
+            <p>Las mejores giftcards para comprar tus productos favoritos al mejor precio.</p>
+        </div>
+        <div class="catalog-grid" id="giftcardCatalog"></div>
+    </section>
+
+    <!-- Catálogo de Streaming -->
+    <section class="steam-catalog-section">
+        <div class="catalog-header">
+            <h2>📺 Streaming</h2>
+            <p>🔥 ¡Tus plataformas favoritas te esperan! Suscripciones y tarjetas de streaming al mejor precio.</p>
+        </div>
+        <div class="catalog-grid" id="streamingCatalog"></div>
+    </section>
+
+    <!-- Catálogo de Otros Programas -->
+    <section class="steam-catalog-section">
+        <div class="catalog-header">
+            <h2>💻 Otros Programas</h2>
+            <p>Software original, asistentes de IA y VPNs con entrega inmediata al mejor precio.</p>
+        </div>
+        <div class="catalog-grid" id="otrosProgramasCatalog"></div>
+    </section>
+
+    <!-- Panel lateral del carrito -->
+    <div class="cart-overlay" id="cartOverlay">
+        <aside class="cart-panel">
+            <div class="cart-header">
+                <h2>Carrito <span id="cartHeaderCount">(0 productos)</span></h2>
+                <button class="cart-close" type="button" id="closeCartBtn" aria-label="Cerrar">✕</button>
+            </div>
+            <div id="cartItems" class="cart-items"></div>
+            <div class="cart-footer">
+                <div class="cart-total-row">
+                    <span>Total</span>
+                    <div class="cart-totals">
+                        <span id="cartTotalUsd">$0.00</span>
+                        <span id="cartTotalBs">Bs 0.00</span>
+                    </div>
+                </div>
+                <button class="btn-checkout" type="button" id="checkoutBtn">FINALIZAR COMPRA</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Modal de autenticación (cuenta / registro / verificación) -->
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-modal">
+            <button class="auth-close" type="button" id="closeAuthBtn" aria-label="Cerrar">✕</button>
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tabLogin" type="button" data-tab="login">Iniciar sesión</button>
+                <button class="auth-tab" id="tabRegistro" type="button" data-tab="registro">Registrarse</button>
+            </div>
+
+            <!-- Panel: Login -->
+            <div class="auth-panel" id="panelLogin">
+                <h3>Inicia sesión con tu correo</h3>
+                <form id="loginForm">
+                    <label for="loginUsuario">Inicia sesión con tu correo electrónico</label>
+                    <input type="email" id="loginUsuario" placeholder="tucorreo@correo.com" autocomplete="username" required>
+                    <label for="loginPassword">Contraseña</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
+                    <label class="auth-check">
+                        <input type="checkbox" id="recordarme">
+                        <span>Recordarme</span>
+                    </label>
+                    <p class="auth-msg" id="loginMsg"></p>
+                    <button type="submit" class="auth-btn">INICIAR SESIÓN</button>
+                </form>
+            </div>
+
+            <!-- Panel: Registro -->
+            <div class="auth-panel" id="panelRegistro" style="display:none">
+                <h3>Crear cuenta</h3>
+                <form id="registroForm">
+                    <label>Usuario</label>
+                    <input type="text" id="regUsuario" placeholder="Nombre de usuario" minlength="3" required>
+                    <label>Correo electrónico</label>
+                    <input type="email" id="regEmail" placeholder="tucorreo@correo.com" required>
+                    <label>Contraseña</label>
+                    <input type="password" id="regPassword" placeholder="Mínimo 6 caracteres" minlength="6" required>
+                    <label>Confirmar contraseña</label>
+                    <input type="password" id="regPassword2" placeholder="Repite la contraseña" minlength="6" required>
+                    <p class="auth-msg" id="regMsg"></p>
+                    <button type="submit" class="auth-btn">ENVIAR CÓDIGO DE VERIFICACIÓN</button>
+                </form>
+            </div>
+
+            <!-- Panel: Confirmación por correo (Supabase) -->
+            <div class="auth-panel" id="panelVerificar" style="display:none">
+                <h3>Confirma tu correo</h3>
+                <p class="auth-info">Enviamos un correo de confirmación a<br><strong id="verifEmailText"></strong></p>
+                <p class="auth-info">Abre el mensaje y pulsa el enlace <strong>Confirmar</strong>.<br>Luego vuelve e inicia sesión.</p>
+                <p class="auth-msg" id="verifMsg"></p>
+                <button type="button" class="auth-btn" id="verifyBtn">YA CONFIRMÉ — INICIAR SESIÓN</button>
+                <button class="auth-link-btn" type="button" id="resendBtn">↻ Reenviar correo de confirmación</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación (reemplaza confirm() nativo, no bloqueante) -->
+    <div class="confirm-overlay" id="confirmOverlay">
+        <div class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="confirmMsg">
+            <p class="confirm-msg" id="confirmMsg"></p>
+            <div class="confirm-actions">
+                <button type="button" class="confirm-cancel" id="confirmCancelBtn">Cancelar</button>
+                <button type="button" class="confirm-accept" id="confirmAcceptBtn">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== CONFIGURACIÓN SUPABASE =====
+        // 1) Crea un proyecto gratis en https://supabase.com
+        // 2) En Panel > Project Settings > API copia:
+        //    - Project URL  (la URL https://XXXX.supabase.co)
+        //    - anon / public key
+        // 3) En Authentication > URL Configuration deja bien el "Site URL".
+        const SUPABASE_URL = 'https://hgtfpulxvkcnooqptlqy.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_8_Vm4OHMI4Yc2hQiLP8yZQ_zTzdo0S_';
+        const SUPABASE_ACTIVO = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY !== 'TU_ANON_KEY';
+
+        let supabaseClient = null;
+        if (SUPABASE_ACTIVO && typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+
+        // ===== AUTENTICACIÓN =====
+        const authDatos = {
+            pendiente: null // { usuario, email, codigo, passHash, expira }
+        };
+
+                /* ===== localStorage safety wrappers ===== */
+        function leerJSON(coleccion, fallback) {
+            try {
+                const raw = localStorage.getItem(coleccion);
+                return raw ? JSON.parse(raw) : fallback;
+            } catch (e) {
+                console.error('localStorage parse error [' + coleccion + ']:', e);
+                return fallback;
+            }
+        }
+        function escribirJSON(coleccion, datos) {
+            try {
+                localStorage.setItem(coleccion, JSON.stringify(datos));
+            } catch (e) {
+                console.error('localStorage write error [' + coleccion + ']:', e);
+            }
+        }
+
+        /* ===== Toast notifications (non-blocking replacement for alert) ===== */
+        function mostrarToast(mensaje, tipo) {
+            tipo = tipo || 'info';
+            const toast = document.createElement('div');
+            toast.className = 'toast toast-' + tipo;
+            toast.textContent = mensaje;
+            document.body.appendChild(toast);
+            requestAnimationFrame(function () {
+                toast.classList.add('show');
+            });
+            clearTimeout(toast._hideTimer);
+            toast._hideTimer = setTimeout(function () {
+                toast.classList.remove('show');
+                setTimeout(function () { toast.remove(); }, 300);
+            }, 3500);
+        }
+        /* ===== Custom confirm dialog (non-blocking replacement for confirm()) ===== */
+        function mostrarConfirm(mensaje, textoAceptar, textoCancelar) {
+            return new Promise(function (resolve) {
+                var overlay = document.getElementById('confirmOverlay');
+                var msgEl = document.getElementById('confirmMsg');
+                var acceptBtn = document.getElementById('confirmAcceptBtn');
+                var cancelBtn = document.getElementById('confirmCancelBtn');
+                if (!overlay || !acceptBtn || !cancelBtn) { resolve(false); return; }
+
+                msgEl.textContent = mensaje;
+                acceptBtn.textContent = textoAceptar || 'Aceptar';
+                cancelBtn.textContent = textoCancelar || 'Cancelar';
+                overlay.classList.add('open');
+
+                function limpiar(resultado) {
+                    overlay.classList.remove('open');
+                    acceptBtn.removeEventListener('click', onAccept);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    document.removeEventListener('keydown', onKey);
+                    overlay.removeEventListener('click', onOverlay);
+                    resolve(resultado);
+                }
+                function onAccept() { limpiar(true); }
+                function onCancel() { limpiar(false); }
+                function onKey(e) { if (e.key === 'Escape') limpiar(false); }
+                function onOverlay(e) { if (e.target === overlay) limpiar(false); }
+
+                acceptBtn.addEventListener('click', onAccept);
+                cancelBtn.addEventListener('click', onCancel);
+                document.addEventListener('keydown', onKey);
+                overlay.addEventListener('click', onOverlay);
+            });
+        }
+
+
+
+        function hashPassword(pass) {
+            // Hash simple (demo/estático). No usar para datos sensibles reales.
+            let h = 5381;
+            const s = 'indesx::' + pass;
+            for (let i = 0; i < s.length; i++) {
+                h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+            }
+            return (h >>> 0).toString(36);
+        }
+
+        function obtenerUsuarios() {
+            return leerJSON('indesx_usuarios', []);
+        }
+        function guardarUsuarios(lista) {
+            escribirJSON('indesx_usuarios', lista);
+        }
+        function obtenerSesion() {
+            return leerJSON('indesx_sesion', null);
+        }
+
+        function mostrarPestana(pestana) {
+            document.getElementById('tabLogin').classList.toggle('active', pestana === 'login');
+            document.getElementById('tabRegistro').classList.toggle('active', pestana === 'registro');
+            document.getElementById('panelLogin').style.display = (pestana === 'login') ? 'block' : 'none';
+            document.getElementById('panelRegistro').style.display = (pestana === 'registro') ? 'block' : 'none';
+            document.getElementById('panelVerificar').style.display = (pestana === 'verificar') ? 'block' : 'none';
+        }
+
+        async function abrirModalAuth() {
+            const sesion = (await obtenerSesionActual()) || obtenerSesion();
+            if (sesion) {
+                const cerrar = await mostrarConfirm(
+                    'Sesión iniciada como: ' + sesion.usuario + '. ¿Deseas cerrar sesión?',
+                    'Cerrar sesión',
+                    'Cancelar'
+                );
+                if (!cerrar) {
+                    await actualizarBotonCuenta();
+                    return;
+                }
+                await cerrarSesion();
+                mostrarToast('Sesión cerrada correctamente', 'success');
+                await actualizarBotonCuenta();
+                return;
+            }
+            limpiarMensajesAuth();
+            precargarLogin();
+            mostrarPestana('login');
+            document.getElementById('authOverlay').classList.add('open');
+        }
+        function cerrarModalAuth() {
+            document.getElementById('authOverlay').classList.remove('open');
+        }
+
+        function generarCodigo() {
+            return String(Math.floor(100000 + Math.random() * 900000));
+        }
+
+        // ===== SESIÓN / BOTÓN DE CUENTA =====
+        function guardarSesion(usuario, email) {
+            localStorage.setItem('indesx_sesion', JSON.stringify({
+                usuario: usuario,
+                email: email || '',
+                fecha: new Date().toISOString()
+            }));
+            actualizarBotonCuenta();
+        }
+
+        async function cerrarSesion() {
+            if (supabaseClient) {
+                try { await supabaseClient.auth.signOut(); } catch (e) { console.error('Supabase signOut:', e); }
+            }
+            localStorage.removeItem('indesx_sesion');
+            actualizarBotonCuenta();
+        }
+
+        async function actualizarBotonCuenta() {
+            const sesion = (await obtenerSesionActual()) || obtenerSesion();
+            const icono = document.getElementById('accountIcon');
+            const etiqueta = document.getElementById('accountLabel');
+            if (sesion) {
+                icono.textContent = '👤';
+                etiqueta.textContent = sesion.usuario;
+            } else {
+                icono.textContent = '🔐';
+                etiqueta.textContent = 'Iniciar sesión';
+            }
+        }
+
+        function limpiarMensajesAuth() {
+            ['loginMsg', 'regMsg', 'verifMsg'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '';
+            });
+        }
+
+        // Precarga el usuario guardado con "Recordarme" (estilo Steam) al abrir el login
+        function precargarLogin() {
+            const recordado = localStorage.getItem('indesx_usuario_recordado') || '';
+            const chk = document.getElementById('recordarme');
+            const usuarioInput = document.getElementById('loginUsuario');
+            if (chk) chk.checked = !!recordado;
+            if (usuarioInput) usuarioInput.value = recordado;
+        }
+
+        // ===== SUPABASE: SESIÓN =====
+        // Devuelve la sesión actual de Supabase (o null si no hay).
+        async function obtenerSesionActual() {
+            if (!supabaseClient) return null;
+            try {
+                const { data } = await supabaseClient.auth.getSession();
+                if (!data.session) return null;
+                const meta = data.session.user.user_metadata || {};
+                return {
+                    usuario: meta.username || data.session.user.email,
+                    email: data.session.user.email,
+                    fecha: data.session.created_at
+                };
+            } catch (e) {
+                console.error('Supabase getSession:', e);
+                return null;
+            }
+        }
+
+        // ===== REGISTRO CON VERIFICACIÓN POR CORREO =====
+        async function enviarCodigoRegistro(event) {
+            event.preventDefault();
+            const usuario = document.getElementById('regUsuario').value.trim();
+            const email = document.getElementById('regEmail').value.trim().toLowerCase();
+            const pass = document.getElementById('regPassword').value;
+            const pass2 = document.getElementById('regPassword2').value;
+            const msg = document.getElementById('regMsg');
+            msg.textContent = '';
+
+            if (pass !== pass2) {
+                msg.textContent = '❌ Las contraseñas no coinciden.';
+                return;
+            }
+            if (pass.length < 6) {
+                msg.textContent = '❌ La contraseña debe tener al menos 6 caracteres.';
+                return;
+            }
+            if (!supabaseClient) {
+                msg.textContent = '⚠️ Supabase no configurado. Añade SUPABASE_URL y SUPABASE_ANON_KEY.';
+                return;
+            }
+
+            // Registro real en Supabase: él envía el correo de confirmación por ti.
+            authDatos.pendiente = null;
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: pass,
+                options: {
+                    data: { username: usuario },
+                    emailRedirectTo: window.location.href
+                }
+            });
+
+            if (error) {
+                msg.textContent = '❌ ' + error.message;
+                return;
+            }
+
+            authDatos.pendiente = { email: email, usuario: usuario };
+            document.getElementById('verifEmailText').textContent = email;
+            document.getElementById('verifMsg').textContent = '';
+            msg.textContent = '📧 Correo de confirmación enviado a ' + email + '.';
+            mostrarPestana('verificar');
+        }
+
+        // Ya se confirmó el correo: ir al panel de inicio de sesión.
+        function irAlLogin() {
+            limpiarMensajesAuth();
+            precargarLogin();
+            mostrarPestana('login');
+        }
+
+        // Reenvía el correo de confirmación de Supabase.
+        async function reenviarCodigo() {
+            const msg = document.getElementById('verifMsg');
+            if (!authDatos.pendiente || !authDatos.pendiente.email) {
+                msg.textContent = '⚠️ No hay una confirmación pendiente. Vuelve a registrarte.';
+                return;
+            }
+            if (!supabaseClient) {
+                msg.textContent = '⚠️ Supabase no configurado.';
+                return;
+            }
+            msg.textContent = '📤 Reenviando correo de confirmación...';
+            const { error } = await supabaseClient.auth.resend({
+                type: 'signup',
+                email: authDatos.pendiente.email
+            });
+            msg.textContent = error
+                ? '❌ ' + error.message
+                : '📧 Correo reenviado a ' + authDatos.pendiente.email + '.';
+        }
+
+        async function iniciarSesion(event) {
+            event.preventDefault();
+            const identificador = document.getElementById('loginUsuario').value.trim();
+            const pass = document.getElementById('loginPassword').value;
+            const msg = document.getElementById('loginMsg');
+            msg.textContent = '';
+
+            if (supabaseClient) {
+                // Modo Supabase: se inicia sesión con el correo electrónico.
+                if (identificador.indexOf('@') < 0) {
+                    msg.textContent = '❌ Introduce tu correo electrónico (el que usaste al registrarte).';
+                    return;
+                }
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: identificador,
+                    password: pass
+                });
+                if (error) {
+                    const m = (error.message || '').toLowerCase();
+                    if (m.indexOf('confirm') >= 0 || m.indexOf('verify') >= 0) {
+                        msg.textContent = '⚠️ Primero confirma tu correo con el enlace que te enviamos.';
+                    } else if (m.indexOf('invalid login') >= 0 || m.indexOf('invalid credentials') >= 0) {
+                        msg.textContent = '❌ Usuario o contraseña incorrectos.';
+                    } else {
+                        msg.textContent = '❌ ' + error.message;
+                    }
+                    return;
+                }
+                const meta = data.user.user_metadata || {};
+                const usuario = meta.username || data.user.email;
+                localStorage.removeItem('indesx_sesion'); // la sesión real la gestiona Supabase
+                cerrarModalAuth();
+                document.getElementById('loginPassword').value = '';
+                mostrarToast('✅ ¡Sesión iniciada! Bienvenido de nuevo, ' + usuario, 'success');
+                actualizarBotonCuenta();
+                return;
+            }
+
+            // Modo local (demo): solo para cuentas guardadas antes en este navegador.
+            const usuarios = obtenerUsuarios();
+            const usuario = usuarios.find(function (u) {
+                return u.usuario.toLowerCase() === identificador.toLowerCase() ||
+                       u.email === identificador.toLowerCase();
+            });
+
+            if (!usuario) {
+                msg.textContent = '❌ No existe una cuenta con ese usuario o correo.';
+                return;
+            }
+            if (hashPassword(pass) !== usuario.passHash) {
+                msg.textContent = '❌ Contraseña incorrecta. Vuelve a intentarlo.';
+                return;
+            }
+
+            guardarSesion(usuario.usuario, usuario.email);
+            const recordarme = document.getElementById('recordarme');
+            if (recordarme && recordarme.checked) {
+                localStorage.setItem('indesx_usuario_recordado', identificador);
+            } else if (recordarme) {
+                localStorage.removeItem('indesx_usuario_recordado');
+            }
+            cerrarModalAuth();
+            document.getElementById('loginUsuario').value = (recordarme && recordarme.checked) ? identificador : '';
+            document.getElementById('loginPassword').value = '';
+            mostrarToast('✅ ¡Sesión iniciada! Bienvenido de nuevo, ' + usuario.usuario, 'success');
+        }
+
+        // Estado inicial del botón de cuenta (según la sesión guardada)
+        actualizarBotonCuenta();
+
+        // ===== SLIDER =====
+        const slidesData = [
+            {
+                background: "linear-gradient(135deg, #050505 0%, #121212 40%, #080808 100%)",
+                title: "BIENVENIDO!",
+                description: "aqui encontraras las mejores ofertas en juegos y giftcards ."
+            },
+            {
+                src: "minecraft_card.png",
+                title: "ofertas recomendadas:minecraft",
+                description: "Minecraft para Windows: juega en modo creativo con recursos ilimitados, o excava hasta las profundidades del mundo en el modo supervivencia, y fabrica armas y armaduras para defenderte de las criaturas peligrosa"
+            },
+            {
+                src: "psn_giftcard_slide.png",
+                title: "PlayStation Gift Cards",
+                description: "Recarga tu cuenta de PlayStation y compra juegos, expansiones y suscripciones en PlayStation Store. Tarjetas de regalo digitales con entrega inmediata de tu código al mejor precio."
+            },
+            {
+                src: "covers/ea-sports-fc-26.jpg",
+                title: "No solo vendemos juegos!",
+                description: "Tambien vendemos articulos in game para una gran variedad de juegos."
+            },
+            {
+                src: "disney_card.png",
+                title: "Streaming sin límites",
+                description: "Netflix, Disney+, Spotify, HBO Max y más. Encuentra aquí tus plataformas de streaming favoritas al mejor precio."
+            }
+        ];
+
+        const slidesContainer = document.getElementById('slides');
+        const titleEl = document.getElementById('slideTitle');
+        const descriptionEl = document.getElementById('slideDescription');
+        const dotsContainer = document.getElementById('dots');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+
+                const SLIDER_INTERVAL = 6000;
+        const sliderEl = document.querySelector('.slider');
+        let currentIndex = 0;
+        let intervalId;
+        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+        function createSlides() {
+            slidesData.forEach((slide, index) => {
+                const slideEl = document.createElement('div');
+                slideEl.className = 'slide';
+                // Prefer slide.src (image) — fall back to slide.background (CSS gradient)
+                if (slide.src) {
+                    slideEl.style.backgroundImage = "url('" + slide.src + "')";
+                } else if (slide.background) {
+                    slideEl.style.backgroundImage = slide.background;
+                }
+                slideEl.dataset.index = index;
+                if (index === 0) slideEl.classList.add('active');
+                slidesContainer.appendChild(slideEl);
+
+                const dot = document.createElement('button');
+                dot.className = 'dot' + (index === 0 ? ' active' : '');
+                dot.dataset.index = index;
+                dot.addEventListener('click', () => goToSlide(index));
+                dotsContainer.appendChild(dot);
+            });
+        }
+
+        function updateCaption(index) {
+            titleEl.textContent = slidesData[index].title;
+            descriptionEl.textContent = slidesData[index].description;
+        }
+
+        function goToSlide(index) {
+            const slides = document.querySelectorAll('.slide');
+            const dots = document.querySelectorAll('.dot');
+            slides.forEach(slide => slide.classList.toggle('active', Number(slide.dataset.index) === index));
+            dots.forEach(dot => dot.classList.toggle('active', Number(dot.dataset.index) === index));
+                        currentIndex = index;
+            updateCaption(index);
+            startInterval();
+        }
+
+        function nextSlide() {
+            goToSlide((currentIndex + 1) % slidesData.length);
+        }
+
+        function prevSlide() {
+            goToSlide((currentIndex - 1 + slidesData.length) % slidesData.length);
+        }
+
+        function startInterval() {
+            if (intervalId) clearInterval(intervalId);
+            if (prefersReduced.matches) return; // respect reduced-motion
+            intervalId = setInterval(nextSlide, SLIDER_INTERVAL);
+        }
+
+        prevBtn.addEventListener('click', prevSlide);
+        nextBtn.addEventListener('click', nextSlide);
+
+        sliderEl.addEventListener('mouseenter', () => clearInterval(intervalId));
+        sliderEl.addEventListener('mouseleave', startInterval);
+
+        createSlides();
+        updateCaption(0);
+        startInterval();
+
+                // ===== RENDER CATALOG (reusable — replaces 3 duplicated forEach blocks) =====
+        // Uses event delegation instead of inline onclick handlers for security (XSS) and maintainability.
+        function renderCatalog(data, containerId, category) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+            data.forEach(function (item) {
+                const card = document.createElement('article');
+                card.className = 'steam-card';
+                card.innerHTML = ''
+                    + '<div class="steam-card-image-wrap">'
+                    + '<img src="' + escapeAttr(item.image) + '" alt="' + escapeAttr(item.title) + '" loading="lazy" decoding="async">'
+                      + '<div class="steam-overlay">'
+                        + '<div class="steam-overlay-header">'
+                          + '<h3>' + escapeHtml(item.title) + '</h3>'
+                          + (item.release ? '<span>' + escapeHtml(item.release) + '</span>' : '')
+                        + '</div>'
+                        + '<p class="steam-overlay-desc">' + escapeHtml(item.description) + '</p>'
+                        + '<div class="steam-tags">'
+                          + (item.tags || []).map(function (tag) { return '<span class="steam-tag">' + escapeHtml(tag) + '</span>'; }).join('')
+                        + '</div>'
+                        + '<div class="steam-overlay-footer">'
+                          + '<button class="btn-add-cart" type="button"'
+                            + ' data-title="' + escapeAttr(item.title) + '"'
+                            + ' data-image="' + escapeAttr(item.image) + '"'
+                            + ' data-price="' + Number(item.price).toFixed(2) + '"'
+                            + ' data-category="' + escapeAttr(category) + '"'
+                            + ' data-tipo="">🛒 Añadir al carrito</button>'
+                        + '</div>'
+                      + '</div>'
+                    + '</div>'
+                    + '<div class="steam-card-meta">'
+                      + '<h3>' + escapeHtml(item.title) + '</h3>'
+                      + '<p class="steam-price">$' + Number(item.price).toFixed(2) + ' USD</p>'
+                    + '</div>';
+                fragment.appendChild(card);
+            });
+            container.appendChild(fragment);
+        }
+
+        // Escapa caracteres peligrosos para atributos HTML y contenido de texto.
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function escapeAttr(str) {
+            return String(str).replace(/[&<>"'\n\r]/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '\n': '&#10;', '\r': '&#13;' }[c];
+            });
+        }
+
+        // ===== CATÁLOGO STEAM =====
+        const steamGames = [
+            {
+                title: "Cyberpunk 2077",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/header.jpg",
+                release: "Lanzamiento: 10 DIC 2020",
+                description: "RPG de acción con un mundo abierto inmersivo y una historia muy destacada.",
+                tags: ["RPG", "Mundo Abierto", "Ciencia Ficción"],
+                site: "https://store.steampowered.com/app/1091500/Cyberpunk_2077/",
+                price: 59.99,
+                category: "steam"
+            },
+            {
+                title: "Red Dead Redemption 2",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/header.jpg",
+                release: "Lanzamiento: 5 OCT 2018",
+                description: "Aventura western con una narrativa profunda y un mundo impresionante.",
+                tags: ["Western", "Acción", "Historia"],
+                site: "https://store.steampowered.com/app/1174180/Red_Dead_Redemption_2/",
+                price: 59.99,
+                category: "steam"
+            },
+            {
+                title: "The Witcher 3",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/292030/header.jpg",
+                release: "Lanzamiento: 19 MAY 2015",
+                description: "RPG de fantasía con misiones, exploración y decisiones que cambian la historia.",
+                tags: ["RPG", "Fantasía", "Narrativa"],
+                site: "https://store.steampowered.com/app/292030/The_Witcher_3_Wild_Hunt/",
+                price: 39.99,
+                category: "steam"
+            },
+            {
+                title: "Wallpaper Engine",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/431960/header.jpg",
+                release: "Lanzamiento: 15 NOV 2016",
+                description: "Personaliza tu escritorio con animaciones y fondos vivos de alta calidad.",
+                tags: ["Personalización", "Escritorio", "Creativo"],
+                site: "https://store.steampowered.com/app/431960/Wallpaper_Engine/",
+                price: 4.99,
+                category: "steam"
+            },
+            {
+                title: "Sekiro",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/814380/header.jpg",
+                release: "Lanzamiento: 22 MAR 2019",
+                description: "Juego de acción y samurái con combate desafiante y muy técnico.",
+                tags: ["Difícil", "Acción", "Samurái"],
+                site: "https://store.steampowered.com/app/814380/Sekiro_Shadows_Die_Twice/",
+                price: 59.99,
+                category: "steam"
+            },
+            {
+                title: "Hades",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/1145360/header.jpg",
+                release: "Lanzamiento: 17 SEP 2020",
+                description: "Roguelike con combate rápido, estilo artístico y gran rejugabilidad.",
+                tags: ["Roguelike", "Indie", "Acción"],
+                site: "https://store.steampowered.com/app/1145360/Hades/",
+                price: 24.99,
+                category: "steam"
+            },
+            {
+                title: "Resident Evil 4",
+                image: "https://cdn.cloudflare.steamstatic.com/steam/apps/2050650/header.jpg",
+                release: "Lanzamiento: 24 MAR 2023",
+                description: "Terror y acción con una experiencia intensa y muy bien valorada.",
+                tags: ["Terror", "Acción", "Shooter"],
+                site: "https://store.steampowered.com/app/2050650/Resident_Evil_4/",
+                price: 59.99,
+                category: "steam"
+            },
+            {
+                title: "Meccha Chameleon",
+                image: "https://cdn.gameseal.com/media/6c/ef/10/1781185884/product-62-cover.webp",
+                release: "Lanzamiento: 2024",
+                description: "Un camaleón mecánico en una aventura de plataformas llena de acción y color.",
+                tags: ["Plataformas", "Acción", "Aventura"],
+                site: "https://store.steampowered.com/app/1283400/Meccha_Chameleon/",
+                price: 12.49,
+                category: "steam"
+            },
+            {
+                title: "Stardew Valley",
+                image: "https://cdn.gameseal.com/media/88/87/f0/1719276997/01904ce5076b7310abbd3e3f9dd7508f.jpg",
+                release: "Lanzamiento: 26 FEB 2016",
+                description: "Cultiva, cría animales y construye tu granja ideal en un pueblo lleno de encanto.",
+                tags: ["Simulación", "Granja", "Indie"],
+                site: "https://store.steampowered.com/app/413150/Stardew_Valley/",
+                price: 14.99,
+                category: "steam"
+            },
+            {
+                title: "Escape the Backrooms",
+                image: "https://cdn.gameseal.com/media/70/10/94/1706889803/5f3531a3f1274dc189d36bb7530af537.jpg",
+                release: "Lanzamiento: 3 AGO 2022",
+                description: "Atrapado en los backrooms, explora, resuelve acertijos y escapa de los horrores.",
+                tags: ["Terror", "Puzzle", "Exploración"],
+                                site: "https://store.steampowered.com/app/1943950/Escape_the_Backrooms/",
+                price: 12.49,
+                category: "steam"
+            },
+            {
+                title: "7 Days to Die",
+                image: "covers/7-days-to-die.jpg",
+                release: "Lanzamiento: 25 JUL 2024",
+                description: "7 Days to Die es un juego de mundo abierto que combina de forma extraordinaria juegos de disparos en primera persona, supervivencia de terror, defensa de torres y rol. Juega al primer RPG de supervivencia zombi de entorno abierto.",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/251570/",
+                price: 20.44,
+                category: "steam"
+            },
+            {
+                title: "ARC Raiders",
+                image: "covers/arc-raiders.jpg",
+                release: "Lanzamiento: 30 OCT 2025",
+                description: "ARC Raiders es un juego multijugador de aventura y extracción ambientado en un mortífero planeta Tierra del futuro, devastado por una misteriosa amenaza mecánica llamada ARC.",
+                tags: ["Acción"],
+                site: "https://store.steampowered.com/app/1808500/",
+                price: 29.80,
+                category: "steam"
+            },
+            {
+                title: "Bodycam",
+                image: "covers/bodycam.jpg",
+                release: "Lanzamiento: 7 JUN 2024",
+                description: "Bodycam es el primer FPS táctico multijugador con una vista real de la cámara corporal en Unreal Engine 5. Los combates cuerpo a cuerpo se sienten crudos y ruidosos. Cada ángulo, leyenda y viñeta importa. Juega Deathmatch, Team Deathmatch y Wingman en mapas fotorrealistas donde el juego en equipo.",
+                tags: ["Acción", "Indie", "Multijugador masivo"],
+                site: "https://store.steampowered.com/app/2406770/",
+                price: 14.05,
+                category: "steam"
+            },
+            {
+                title: "Borderlands 3 Ultimate Edition",
+                image: "covers/borderlands-3-ultimate.jpg",
+                release: "Lanzamiento: 13 MAR 2020",
+                description: "¡Vuelve el padre de los shooter-looter con la Ultimate Edition: una aventura llena de caos, tropecientas mil armas y todos los contenidos adicionales incluidos.",
+                tags: ["Acción", "Rol"],
+                site: "https://store.steampowered.com/app/397540/",
+                price: 16.24,
+                category: "steam"
+            },
+            {
+                title: "Bus Simulator 27",
+                image: "covers/bus-simulator-27.jpg",
+                release: "Lanzamiento: 8 SEP 2026",
+                description: "Conduce autobuses con licencia oficial de fabricantes de renombre y haz que tu empresa de autobuses triunfe. ¡El sistema de transporte público de Felicia Bay cuenta contigo!",
+                tags: ["Simuladores"],
+                site: "https://store.steampowered.com/app/2397320/",
+                price: 23.12,
+                category: "steam"
+            },
+            {
+                title: "Clair Obscur: Expedition 33",
+                image: "covers/clair-obscur-expedition-33.jpg",
+                release: "Lanzamiento: 24 ABR 2025",
+                description: "Guía a la expedición 33 en su viaje para destruir a la Peintresse para que no pinte la muerte. Explora un mundo inspirado por la Francia de la Belle Époque y combate enemigos únicos en este juego de rol por turnos con mecánicas en tiempo real.",
+                tags: ["Acción", "Rol"],
+                site: "https://store.steampowered.com/app/1903340/",
+                price: 27.08,
+                category: "steam"
+            },
+            {
+                title: "Crimson Desert Enhanced",
+                image: "covers/crimson-desert-enhanced.jpg",
+                release: "Lanzamiento: 19 MAR 2026",
+                description: "Crimson Desert es un juego de acción y aventura en mundo abierto ambientado en Pywel. Acompaña a Kliff en su viaje para reunir a los Melenas Grises y salvar el continente. Zonas salvajes, ciudades, ruinas antiguas y el misterioso Abismo; forja tu propio camino a través del combate y la exploración.",
+                tags: ["Acción", "Aventura"],
+                site: "https://store.steampowered.com/app/3321460/",
+                price: 55.87,
+                category: "steam"
+            },
+            {
+                title: "Crusader Kings III",
+                image: "covers/crusader-kings-iii.jpg",
+                release: "Lanzamiento: 1 SEP 2020",
+                description: "Ama, lucha, planea y reclama la grandeza. Determina el legado de tu casa nobiliaria en la gran estrategia en expansión de Crusader Kings III. La muerte solo es el comienzo mientras lideras el linaje de tu dinastía en esta completa simulación realista de la Edad Media.",
+                tags: ["Rol", "Simuladores", "Estrategia"],
+                site: "https://store.steampowered.com/app/1158310/",
+                price: 16.09,
+                category: "steam"
+            },
+            {
+                title: "EA SPORTS FC 26",
+                image: "covers/ea-sports-fc-26.jpg",
+                release: "Lanzamiento: 25 SEP 2025",
+                description: "Vive The World's Game como nunca antes en EA SPORTS FC 26. Alcanza la gloria en un modo de torneo internacional de 48 equipos, afronta desafíos de Mánager en vivo temáticos y entra en Carrera de futbolista con nuevos ICONOS y Héroes internacionales.",
+                tags: ["Simuladores", "Deportes"],
+                site: "https://store.steampowered.com/app/3405690/",
+                price: 6.27,
+                category: "steam"
+            },
+            {
+                title: "EA SPORTS FC 27",
+                image: "covers/ea-sports-fc-27.jpg",
+                release: "Lanzamiento: 24 SEP 2026",
+                description: "Te damos la bienvenida a The World's Game en EA SPORTS FC 27. Adéntrate en The Grounds, un espacio de juego donde las calles se encuentran con el estadio, y siente un mayor control en cada modo, ya que las innovaciones impulsadas por la comunidad ofrecen una jugabilidad más fiel al fútbol.",
+                tags: ["Simuladores", "Deportes"],
+                site: "https://store.steampowered.com/app/4080220/",
+                price: 36.98,
+                category: "steam"
+            },
+            {
+                title: "Farming Simulator 25",
+                image: "covers/farming-simulator-25.jpg",
+                release: "Lanzamiento: 12 NOV 2024",
+                description: "Disfruta de la vida en la granja con Farming Simulator 25 tanto en solitario como de forma cooperativa en modo multijugador. ¡La granja es tuya!",
+                tags: ["Simuladores"],
+                site: "https://store.steampowered.com/app/2300320/",
+                price: 28.79,
+                category: "steam"
+            },
+            {
+                title: "God of War",
+                image: "covers/god-of-war.jpg",
+                release: "Lanzamiento: 14 ENE 2022",
+                description: "Kratos ha dejado atrás su venganza contra los dioses del Olimpo y vive ahora como un hombre en los dominios de los dioses y monstruos nórdicos. En este mundo cruel e implacable debe luchar para sobrevivir… y enseñar a su hijo a hacerlo también.",
+                tags: ["Acción", "Aventura", "Rol"],
+                site: "https://store.steampowered.com/app/1593500/",
+                price: 21.31,
+                category: "steam"
+            },
+            {
+                title: "Halloween: The Game",
+                image: "covers/halloween-the-game.jpg",
+                release: "Lanzamiento: 8 SEP 2026",
+                description: "En la noche de Halloween de 1978, nadie está a salvo de Michael Myers. Conviértete en el terror o lucha contra el rostro del mal en Halloween.",
+                tags: ["Acción"],
+                site: "https://store.steampowered.com/app/3219630/",
+                price: 41.80,
+                category: "steam"
+            },
+            {
+                title: "Hearts of Iron IV",
+                image: "covers/hearts-of-iron-iv.jpg",
+                release: "Lanzamiento: 6 JUN 2016",
+                description: "¡Tenemos la victoria al alcance de la mano! Tu capacidad para liderar tu nación es tu arma principal. En el juego de estrategia Hearts of Iron IV podrás ponerte el mando de cualquier nación de la II Guerra Mundial, el conflicto más fascinante de la historia mundial.",
+                tags: ["Simuladores", "Estrategia"],
+                site: "https://store.steampowered.com/app/394360/",
+                price: 13.94,
+                category: "steam"
+            },
+            {
+                title: "HELLDIVERS 2",
+                image: "covers/helldivers-2.jpg",
+                release: "Lanzamiento: 8 FEB 2024",
+                description: "La última línea de ataque de la galaxia. Alístate en los Helldivers y únete a la lucha por la libertad en una galaxia hostil en un juego de disparos en tercera persona rápido, frenético y feroz.",
+                tags: ["Acción"],
+                site: "https://store.steampowered.com/app/553850/",
+                price: 40.19,
+                category: "steam"
+            },
+            {
+                title: "How to Fish",
+                image: "covers/how-to-fish.jpg",
+                release: "Lanzamiento: 20 AGO 2026",
+                description: "How To Fish es un simulador de pesca basado en la física para hasta 4 jugadores. Vas navegando y bebiendo cuando, de repente, te estrellas contra una islita. Tendrás que aprender a pescar para volver a casa.",
+                tags: ["Acción", "Casual", "Indie"],
+                site: "https://store.steampowered.com/app/4001890/",
+                price: 6.72,
+                category: "steam"
+            },
+            {
+                title: "Human Fall Flat",
+                image: "covers/human-fall-flat.jpg",
+                release: "Lanzamiento: 22 JUL 2016",
+                description: "Human Fall Flat es un divertido juego de plataformas ambientado en paisajes flotantes y oníricos para hasta 8 jugadores en línea. Ahora con niveles gratuitos para recompensar a una comunidad muy entregada.",
+                tags: ["Aventura", "Casual", "Indie"],
+                site: "https://store.steampowered.com/app/477160/",
+                price: 2.44,
+                category: "steam"
+            },
+            {
+                title: "Mad Max",
+                image: "covers/mad-max.jpg",
+                release: "Lanzamiento: 1 SEP 2015",
+                description: "Juega como Mad Max, héroe reacio y superviviente. Max tan solo anhela dejar atrás la locura y hallar la paz.",
+                tags: ["Acción", "Aventura"],
+                site: "https://store.steampowered.com/app/234140/",
+                price: 2.96,
+                category: "steam"
+            },
+            {
+                title: "Mortal Shell II",
+                image: "covers/mortal-shell-ii.jpg",
+                release: "Lanzamiento: 20 AGO 2026",
+                description: "Su carne es tu arma. Mortal Shell II es la secuela independiente de un RPG de acción con peleas despiadadas y llenas de adrenalina. Posee guerreros excepcionales, derroca dioses falsos y redime un mundo en destrucción.",
+                tags: ["Acción", "Rol"],
+                site: "https://store.steampowered.com/app/2584270/",
+                price: 28.58,
+                category: "steam"
+            },
+            {
+                title: "Mount & Blade II: Bannerlord",
+                image: "covers/mount-and-blade-ii-bannerlord.jpg",
+                release: "Lanzamiento: 25 OCT 2022",
+                description: "A strategy/action RPG. Create a character, engage in diplomacy, craft, trade and conquer new lands in a vast medieval sandbox. Raise armies to lead into battle and command and fight alongside your troops in massive real-time battles using a deep but intuitive skill-based combat system.",
+                tags: ["Acción", "Indie", "Rol"],
+                site: "https://store.steampowered.com/app/261550/",
+                price: 21.19,
+                category: "steam"
+            },
+            {
+                title: "NBA 2K26",
+                image: "covers/nba-2k26.jpg",
+                release: "Lanzamiento: 4 SEP 2025",
+                description: "El derecho a presumir está en juego en Mi CARRERA, MyTEAM, Mi NBA, La W y Jugar ya. Exhibe tu colección de movimientos con hiperrealismo, gracias a la tecnología ProPLAY, y desafía a tus amigos, o rivales, en los modos competitivos de NBA 2K26, y leave no doubt: tú eres el rey.",
+                tags: ["Deportes"],
+                site: "https://store.steampowered.com/app/3472040/",
+                price: 12.54,
+                category: "steam"
+            },
+            {
+                title: "NBA 2K27",
+                image: "covers/nba-2k27.jpg",
+                release: "Lanzamiento: 3 SEP 2026",
+                description: "La intensidad no para y la carrera nunca termina en NBA 2K27. Persigue la grandeza sin descanso en Mi CARRERA, MyTEAM y Mi NBA y haz realidad tus sueños de baloncesto.",
+                tags: ["Deportes"],
+                site: "https://store.steampowered.com/app/4356430/",
+                price: 42.29,
+                category: "steam"
+            },
+            {
+                title: "No Man's Sky",
+                image: "covers/no-mans-sky.jpg",
+                release: "Lanzamiento: 12 AGO 2016",
+                description: "No Man's Sky es un juego de ciencia ficción sobre exploración y supervivencia en un universo infinito generado de forma procedimental.",
+                tags: ["Acción", "Aventura"],
+                site: "https://store.steampowered.com/app/275850/",
+                price: 19.78,
+                category: "steam"
+            },
+            {
+                title: "No More Room in Hell 2",
+                image: "covers/no-more-room-in-hell-2.jpg",
+                release: "Lanzamiento: 11 AGO 2026",
+                description: "No More Room in Hell 2 es un intenso juego de disparos de zombis para 8 jugadores. Vence a la interminable horda de muertos vivientes. Evita la infección. Sobrevivid juntos al infierno.",
+                tags: ["Acción", "Indie"],
+                site: "https://store.steampowered.com/app/292000/",
+                price: 27.39,
+                category: "steam"
+            },
+            {
+                title: "Onimusha: Way of the Sword",
+                image: "covers/onimusha-way-of-the-sword.jpg",
+                release: "Lanzamiento: 3 SEP 2026",
+                description: "Un samurái con un guantelete Oni hará frente a la amenaza de los Genma que se cierne sobre Kioto. Se enfrentará en combates cruentos y encarnizados, mientras busca su razón para luchar.",
+                tags: ["Acción", "Aventura", "Rol"],
+                site: "https://store.steampowered.com/app/2638890/",
+                price: 66.60,
+                category: "steam"
+            },
+            {
+                title: "Peak",
+                image: "covers/peak.jpg",
+                release: "Lanzamiento: 16 JUN 2025",
+                description: "PEAK es un juego cooperativo de escalada en el que un solo error puede ser fatal. Ya sea en solitario o en grupo, la única esperanza de salir de la misteriosa isla es subiendo hasta la cima de la montaña del centro. ¿Tenéis lo que hace falta para subir al PICO?",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/3527290/",
+                price: 5.79,
+                category: "steam"
+            },
+            {
+                title: "Project Zomboid",
+                image: "covers/project-zomboid.jpg",
+                release: "Lanzamiento: 8 NOV 2013",
+                description: "Project Zomboid es el máximo exponente de la supervivencia zombi. Solo o en multijugador: saquea, construye, fabrica, lucha, cultiva y pesca en una lucha por sobrevivir. Un RPG exigente, un mapa enorme y un sandbox totalmente configurable. ¿Cómo morirás? Solo hace falta un mordisco.",
+                tags: ["Indie", "Rol", "Simuladores"],
+                site: "https://store.steampowered.com/app/108600/",
+                price: 5.51,
+                category: "steam"
+            },
+            {
+                title: "Raft",
+                image: "covers/raft.jpg",
+                release: "Lanzamiento: 20 JUN 2022",
+                description: "Raft throws you and your friends into an epic oceanic adventure! Alone or together, players battle to survive a perilous voyage across a vast sea! Gather debris, scavenge reefs and build your own floating home, but be wary of the man-eating sharks!",
+                tags: ["Aventura", "Indie", "Simuladores"],
+                site: "https://store.steampowered.com/app/648800/",
+                price: 6.53,
+                category: "steam"
+            },
+            {
+                title: "Ready or Not",
+                image: "covers/ready-or-not.jpg",
+                release: "Lanzamiento: 13 DIC 2023",
+                description: "Los Sueños. El LSPD informa de un gran aumento de los delitos en toda el área metropolitana de Los Sueños. Los SWAT tratan de solventar situaciones de alto riesgo como tomas de rehenes, amenazas de bomba y sospechosos atrincherados, entre otros.",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/1144200/",
+                price: 22.68,
+                category: "steam"
+            },
+            {
+                title: "Resonance: A Plague Tale Legacy",
+                image: "covers/resonance-a-plague-tale-legacy.jpg",
+                release: "Lanzamiento: 27 AGO 2026",
+                description: "Ponte en la piel de Sofía y vive la historia previa a la del galardonado A Plague Tale. Dirígete a la Isla del Minotauro, supera a tus enemigos, descubre antiguos secretos y enfréntate a una criatura mítica en el corazón de una terrible maldición.",
+                tags: ["Acción", "Aventura"],
+                site: "https://store.steampowered.com/app/2713000/",
+                price: 38.24,
+                category: "steam"
+            },
+            {
+                title: "Risk of Rain 2",
+                image: "covers/risk-of-rain-2.jpg",
+                release: "Lanzamiento: 11 AGO 2020",
+                description: "Lucha contra hordas de monstruos enloquecidos junto a tus amigos o en solitario para lograr escapar de un planeta alienígena sumido en el caos. Combina el botín de maneras asombrosas y domina cada personaje hasta encarnar la destrucción que tanto te aterraba tras tu primer aterrizaje forzoso.",
+                tags: ["Acción", "Indie"],
+                site: "https://store.steampowered.com/app/632360/",
+                price: 8.72,
+                category: "steam"
+            },
+            {
+                title: "Schedule I",
+                image: "covers/schedule-i.jpg",
+                release: "Lanzamiento: 24 MAR 2025",
+                description: "From small-time dope pusher to kingpin - manufacture and distribute a range of drugs throughout the grungy city of Hyland Point. Expand your empire with properties, businesses, employees and more.",
+                tags: ["Acción", "Indie", "Simuladores"],
+                site: "https://store.steampowered.com/app/3164500/",
+                price: 7.01,
+                category: "steam"
+            },
+            {
+                title: "The Elder Scrolls V: Skyrim Special Edition",
+                image: "covers/skyrim-special-edition.jpg",
+                release: "Lanzamiento: 27 OCT 2016",
+                description: "The Elder Scrolls V: Skyrim Special Edition, ganador de más de 200 premios al Juego del Año, da vida a la fantasía épica con un nivel de detalle asombroso e incluye el juego aclamado por la crítica y sus complementos.",
+                tags: ["Rol"],
+                site: "https://store.steampowered.com/app/489830/",
+                price: 16.60,
+                category: "steam"
+            },
+            {
+                title: "Sons Of The Forest",
+                image: "covers/sons-of-the-forest.jpg",
+                release: "Lanzamiento: 22 FEB 2024",
+                description: "Sent to find a missing billionaire on a remote island, you find yourself in a cannibal-infested hellscape. Craft, build, and struggle to survive, alone or with friends, in this terrifying new open-world survival horror simulator.",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/1326470/",
+                price: 5.76,
+                category: "steam"
+            },
+            {
+                title: "Star Wars Zero Company",
+                image: "covers/star-wars-zero-company.jpg",
+                release: "Lanzamiento: 27 AGO 2026",
+                description: "Dirige un escuadrón de élite a lo largo de una auténtica y apasionante historia en STAR WARS Zero Company, un juego táctico por turnos para un jugador ambientado en el ocaso de las Guerras Clon.",
+                tags: ["Aventura", "Rol", "Simuladores"],
+                site: "https://store.steampowered.com/app/2075800/",
+                price: 30.68,
+                category: "steam"
+            },
+            {
+                title: "Tabletop Simulator",
+                image: "covers/tabletop-simulator.jpg",
+                release: "Lanzamiento: 5 JUN 2015",
+                description: "Tabletop Simulator es el único simulador donde puedes desahogarte volteando la mesa. No hay reglas: solo tú, un sandbox de física y tus amigos. Crea tus propios juegos de mesa en línea o juega los miles de mods de la comunidad.",
+                tags: ["Casual", "Indie", "Rol"],
+                site: "https://store.steampowered.com/app/286160/",
+                price: 5.41,
+                category: "steam"
+            },
+            {
+                title: "Terraria",
+                image: "covers/terraria.jpg",
+                release: "Lanzamiento: 16 MAY 2011",
+                description: "¡Cava, lucha, explora, construye! Con este juego de aventuras repleto de acción nada es imposible. ¡Pack de Cuatro también disponible!",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/105600/",
+                price: 4.26,
+                category: "steam"
+            },
+            {
+                title: "The Blood of Dawnwalker",
+                image: "covers/the-blood-of-dawnwalker.jpg",
+                release: "Lanzamiento: 2 SEP 2026",
+                description: "The Blood of Dawnwalker es un RPG de acción y fantasía oscura en mundo abierto ambientado en la Europa del siglo XIV. Juegas como Coen, humano de día y vampiro de noche, y luchas por salvar a tu familia en una historia moldeada por tus decisiones.",
+                tags: ["Acción", "Aventura", "Rol"],
+                site: "https://store.steampowered.com/app/3751260/",
+                price: 46.33,
+                category: "steam"
+            },
+            {
+                title: "The Forest",
+                image: "covers/the-forest.jpg",
+                release: "Lanzamiento: 30 ABR 2018",
+                description: "As the lone survivor of a passenger jet crash, you find yourself in a mysterious forest battling to stay alive against a society of cannibalistic mutants. Build, explore, survive in this terrifying first person survival horror simulator.",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/242760/",
+                price: 2.31,
+                category: "steam"
+            },
+            {
+                title: "The Last of Us Part I",
+                image: "covers/the-last-of-us-part-i.jpg",
+                release: "Lanzamiento: 28 MAR 2023",
+                description: "Descubre el galardonado juego que inspiró la aclamada serie de televisión. Guía a Joel y Ellie por unos Estados Unidos postapocalípticos y encuentra aliados y enemigos inolvidables en The Last of Us.",
+                tags: ["Acción", "Aventura"],
+                site: "https://store.steampowered.com/app/1888930/",
+                price: 29.82,
+                category: "steam"
+            },
+            {
+                title: "The Outlast Trials",
+                image: "covers/the-outlast-trials.jpg",
+                release: "Lanzamiento: 5 MAR 2024",
+                description: "Red Barrels invites you to experience mind-numbing terror, this time with friends. Whether you go through the trials alone or in teams, if you survive long enough and complete the therapy, Murkoff will happily let you leave… but will you be the same?",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/1304930/",
+                price: 16.40,
+                category: "steam"
+            },
+            {
+                title: "Total War: WARHAMMER III",
+                image: "covers/total-war-warhammer-iii.jpg",
+                release: "Lanzamiento: 16 FEB 2022",
+                description: "El final cataclísmico de la trilogía de Total War: WARHAMMER® ha llegado. Reagrupa a tus fuerzas y adéntrate en el Reino del Caos, una dimensión de terrores horripilantes en la que se decidirá el destino del mundo. ¿Conquistarás a tus demonios... o los dirigirás?",
+                tags: ["Acción", "Estrategia"],
+                site: "https://store.steampowered.com/app/1142710/",
+                price: 14.08,
+                category: "steam"
+            },
+            {
+                title: "Valheim",
+                image: "covers/valheim.jpg",
+                release: "Lanzamiento: 9 SEP 2026",
+                description: "Un juego colaborativo de exploración y supervivencia para 1-10 jugadores, ambientado en un más allá generado por procedimientos e inspirado en la cultura vikinga. ¡Lucha, construye y conquista tu camino hacia una saga digna del patrocinio de Odín!",
+                tags: ["Acción", "Aventura", "Indie"],
+                site: "https://store.steampowered.com/app/892970/",
+                price: 24.79,
+                category: "steam"
+            },
+            {
+                title: "Wanderburg",
+                image: "covers/wanderburg.jpg",
+                release: "Lanzamiento: 8 SEP 2026",
+                description: "Lleva tu Castillo con Ruedas a la batalla en este roguelike medieval minimalista lleno de fortalezas errantes. Devora aldeas enteras, construye tu arsenal modular y crece con cada bastión que aplastas.",
+                tags: ["Acción", "Casual", "Indie"],
+                site: "https://store.steampowered.com/app/3624140/",
+                price: 9.34,
+                category: "steam"
+            },
+            {
+                title: "Wardogs",
+                image: "covers/wardogs.jpg",
+                release: "Lanzamiento: 10 SEP 2026",
+                description: "WARDOGS es un shooter de guerra total en primera persona que conjuga tiroteos tácticos y combate de armas combinadas con mecánicas de construcción y destrucción en un vasto campo de batalla tipo sandbox para hasta 100 jugadores.",
+                tags: ["Acción", "Indie", "Multijugador"],
+                site: "https://store.steampowered.com/app/1867240/",
+                price: 45.36,
+                category: "steam"
+            },
+            {
+                title: "Wardogs: Supporter Edition",
+                image: "covers/wardogs-supporter.jpg",
+                release: "Lanzamiento: 10 SEP 2026",
+                description: "La Supporter Edition de WARDOGS incluye el juego base más contenido extra de apoyo al desarrollo: cosméticos exclusivos y ventajas para el campo de batalla. Shooter de guerra total en primera persona con hasta 100 jugadores.",
+                tags: ["Acción", "Indie", "Multijugador"],
+                site: "https://store.steampowered.com/app/1867240/",
+                price: 55.84,
+                category: "steam"
+            },
+            {
+                title: "NBA 2K27 Deluxe Edition",
+                image: "covers/nba-2k27.jpg",
+                release: "Lanzamiento: 3 SEP 2026",
+                description: "La Deluxe Edition de NBA 2K27 incluye el juego base y contenido adicional de MyTEAM. Persigue la grandeza sin descanso en Mi CARRERA, MyTEAM y Mi NBA y haz realidad tus sueños de baloncesto.",
+                tags: ["Deportes"],
+                site: "https://store.steampowered.com/app/4356430/",
+                price: 98.25,
+                category: "steam"
+            },
+            {
+                title: "EA SPORTS FC 27 Ultimate Edition",
+                image: "covers/ea-sports-fc-27.jpg",
+                release: "Lanzamiento: 24 SEP 2026",
+                description: "La Ultimate Edition de EA SPORTS FC 27 incluye el juego base y contenido extra para Ultimate Team. Adéntrate en The Grounds, donde las calles se encuentran con el estadio, y siente un mayor control en cada modo.",
+                tags: ["Simuladores", "Deportes"],
+                site: "https://store.steampowered.com/app/4080220/",
+                                price: 68.78,
+                category: "steam"
+            },
+            {
+                title: "Halloween: The Game Digital Deluxe Edition",
+                image: "covers/halloween-the-game.jpg",
+                release: "Lanzamiento: 8 SEP 2026",
+                description: "La Digital Deluxe Edition de Halloween incluye el juego base más contenido digital exclusivo. En la noche de Halloween de 1978, nadie está a salvo de Michael Myers. Conviértete en el terror o lucha contra el rostro del mal.",
+                tags: ["Acción"],
+                site: "https://store.steampowered.com/app/3219630/",
+                price: 56.57,
+                category: "steam"
+            },
+            {
+                title: "Halloween: The Game (Cuenta)",
+                image: "covers/halloween-the-game.jpg",
+                release: "Lanzamiento: 8 SEP 2026",
+                description: "Entrega por cuenta de Halloween: The Game. En la noche de Halloween de 1978, nadie está a salvo de Michael Myers. Conviértete en el terror o lucha contra el rostro del mal en Halloween.",
+                tags: ["Acción"],
+                site: "https://store.steampowered.com/app/3219630/",
+                price: 18.83,
+                category: "steam"
+            },
+            {
+                title: "Wardogs (Cuenta)",
+                image: "covers/wardogs.jpg",
+                release: "Lanzamiento: 10 SEP 2026",
+                description: "Entrega por cuenta de WARDOGS. Shooter de guerra total en primera persona que conjuga tiroteos tácticos y combate de armas combinadas con mecánicas de construcción y destrucción en un vasto campo de batalla tipo sandbox para hasta 100 jugadores.",
+                tags: ["Acción", "Indie", "Multijugador"],
+                site: "https://store.steampowered.com/app/1867240/",
+                price: 21.81,
+                category: "steam"
+            },
+            {
+                title: "NBA 2K27 (Clave)",
+                image: "covers/nba-2k27.jpg",
+                release: "Lanzamiento: 3 SEP 2026",
+                description: "Clave de activación de NBA 2K27. La intensidad no para y la carrera nunca termina: persigue la grandeza sin descanso en Mi CARRERA, MyTEAM y Mi NBA y haz realidad tus sueños de baloncesto.",
+                tags: ["Deportes"],
+                site: "https://store.steampowered.com/app/4356430/",
+                price: 66.98,
+                category: "steam"
+            },
+            {
+                title: "Project Zomboid (Regalo)",
+                image: "covers/project-zomboid.jpg",
+                release: "Lanzamiento: 8 NOV 2013",
+                description: "Entrega por regalo de Project Zomboid, el máximo exponente de la supervivencia zombi. Saquea, construye, fabrica, lucha, cultiva y pesca en una lucha por sobrevivir. Un RPG exigente, un mapa enorme y un sandbox totalmente configurable.",
+                tags: ["Indie", "Rol", "Simuladores"],
+                site: "https://store.steampowered.com/app/108600/",
+                price: 10.33,
+                category: "steam"
+            },
+            {
+                title: "How to Fish (Regalo)",
+                image: "covers/how-to-fish.jpg",
+                release: "Lanzamiento: 20 AGO 2026",
+                description: "Entrega por regalo de How To Fish, el simulador de pesca basado en la física para hasta 4 jugadores. Vas navegando y bebiendo cuando te estrellas contra una islita: tendrás que aprender a pescar para volver a casa.",
+                tags: ["Acción", "Casual", "Indie"],
+                site: "https://store.steampowered.com/app/4001890/",
+                price: 10.92,
+                category: "steam"
+            }
+                ];
+
+        renderCatalog(steamGames, 'steamCatalog', 'steam');
+
+        // ===== CATÁLOGO GIFTCARDS =====
+        const giftcardData = [
+            { title: "PSN $10", image: "playstation-network-card-10usd-usa.png", description: "Tarjeta PSN de $10, perfecta para pequeñas compras y recargas rápidas.", tags: ["PlayStation", "PSN", "$10"], price: 12.38, category: "giftcard" },
+            { title: "PSN $15", image: "ramka-psn-15-usa.jpg", description: "Tarjeta PSN de $15, perfecta para pequeñas compras.", tags: ["PlayStation", "PSN", "$15"], price: 16.76, category: "giftcard" },
+            { title: "PSN $20", image: "playstation-network-card-psn-usd-us-20.jpg", description: "Tarjeta PSN de $20 para expandir tu biblioteca de juegos y contenido.", tags: ["PlayStation", "PSN", "$20"], price: 24.25, category: "giftcard" },
+            { title: "PSN $30", image: "playstation-network-card-psn-usd-us-30.jpg", description: "Tarjeta PSN de $30 para comprar juegos, DLC y más.", tags: ["PlayStation", "PSN", "$30"], price: 33.67, category: "giftcard" },
+            { title: "PSN $45", image: "psn-45-usa.jpg", description: "Tarjeta PSN de $45 para expandir tu colección digital.", tags: ["PlayStation", "PSN", "$45"], price: 49.44, category: "giftcard" },
+            { title: "PSN $50", image: "playstation-network-card-50usd-usa.jpg", description: "Recarga $50 en PSN y disfruta de los mejores títulos.", tags: ["PlayStation", "PSN", "$50"], price: 60.44, category: "giftcard" },
+            { title: "PSN $75", image: "playstation-network-card-psn-usd-us-75.jpg", description: "Tarjeta PSN de $75 para juegos, contenido adicional y más.", tags: ["PlayStation", "PSN", "$75"], price: 85.45, category: "giftcard" },
+            { title: "PSN $100", image: "playstation-network-card-100usd-usa.jpg", description: "La recarga máxima de $100 para tu cuenta PlayStation.", tags: ["PlayStation", "PSN", "$100"], price: 113.07, category: "giftcard" },
+            { title: "Nintendo eShop $5", image: "nintendo_eshop_5.png", description: "Tarjeta Nintendo eShop de $5 USD para comprar juegos y contenido digital en tu consola.", tags: ["Nintendo", "eShop", "$5"], price: 7.57, category: "giftcard" },
+            { title: "Nintendo eShop $10", image: "nintendo_eshop_10.png", description: "Tarjeta Nintendo eShop de $10 USD para añadir fondos y comprar tus juegos favoritos.", tags: ["Nintendo", "eShop", "$10"], price: 11.15, category: "giftcard" },
+            { title: "Nintendo eShop $20", image: "nintendo_eshop_20.png", description: "Tarjeta Nintendo eShop de $20 USD para juegos indie, expansiones y DLCs.", tags: ["Nintendo", "eShop", "$20"], price: 21.90, category: "giftcard" },
+            { title: "Nintendo eShop $35", image: "giftcard_35.png", description: "Tarjeta Nintendo eShop de $35 USD, ideal para títulos completos y grandes compras.", tags: ["Nintendo", "eShop", "$35"], price: 38.07, category: "giftcard" },
+            { title: "Nintendo eShop $50", image: "nintendo_eshop_50.png", description: "Tarjeta Nintendo eShop de $50 USD para comprar juegos AAA y todo el contenido que quieras.", tags: ["Nintendo", "eShop", "$50"], price: 54.24, category: "giftcard" },
+            { title: "Roblox 100 Robux", image: "https://cdn.gameseal.com/media/8f/29/b2/1720529864/Roblox%20Card%20100%20Robux%20Key%20-%20GLOBAL.png", description: "100 Robux para gastar en el mundo de Roblox.", tags: ["Roblox", "Robux"], price: 4.68, category: "giftcard" },
+            { title: "Roblox 800 Robux", image: "https://cdn.gameseal.com/media/a0/74/27/1720530148/Roblox%20Card%20800%20Robux%20Key%20-%20GLOBAL.png", description: "Consigue Robux y objetos exclusivos para personalizar tu experiencia en Roblox.", tags: ["Roblox", "Robux"], price: 12.91, category: "giftcard" },
+            { title: "Roblox 2000 Robux", image: "https://cdn.gameseal.com/media/2b/0e/b5/1720530235/Roblox%20Card%202000%20Robux%20Key%20-%20GLOBAL.png", description: "2000 Robux para disfrutar al máximo en Roblox.", tags: ["Roblox", "Robux"], price: 25.11, category: "giftcard" },
+            { title: "Roblox 1500 Robux", image: "https://cdn.gameseal.com/media/5b/a9/05/1707133971/Ramka%20Roblox%20%281%29%201500%20points.png", description: "1500 Robux para gastar en tu experiencia de juego.", tags: ["Roblox", "Robux"], price: 22.99, category: "giftcard" },
+            { title: "Roblox 1000 robux", image: "https://cdn.gameseal.com/media/09/4c/3f/1706692251/Ramka%20Roblox.png", description: "Tarjeta Roblox recargable para comprar artículos y accesorios.", tags: ["Roblox", "Recargable"], price: 10, category: "giftcard" },
+            { title: "Steam Gift Card $1", image: "https://cdn.gameseal.com/media/17/17/82/1725621900/Steam-Gift-Card-1-usa.png", description: "Tarjeta Steam de $1 USD, perfecta para pequeños descuentos en tu carrito.", tags: ["Steam", "PC"], price: 1.59, category: "giftcard" },
+            { title: "Steam Gift Card $5", image: "https://cdn.gameseal.com/media/61/70/d6/1725019380/Steam-Gift-Card-5-USA.png", description: "Tarjeta Steam de $5 USD para añadir fondos a tu billetera Steam.", tags: ["Steam", "PC"], price: 6.59, category: "giftcard" },
+            { title: "Steam Gift Card $10", image: "https://cdn.gameseal.com/media/eb/05/6b/1725279366/steam-10-usa_%281%29.png", description: "Tarjeta Steam de $10 USD para comprar juegos indie o en oferta.", tags: ["Steam", "PC"], price: 11.34, category: "giftcard" },
+            { title: "Steam Gift Card $15", image: "https://cdn.gameseal.com/media/4b/64/2f/1725622652/Steam-Gift-Card-15-usa.png", description: "Tarjeta Steam de $15 USD para expandir tu biblioteca de juegos.", tags: ["Steam", "PC"], price: 16.84, category: "giftcard" },
+            { title: "Steam Gift Card $20", image: "https://cdn.gameseal.com/media/97/f0/63/1725020781/Steam-Gift-Card-20-us.png", description: "Tarjeta Steam de $20 USD para juegos populares y contenido digital.", tags: ["Steam", "PC"], price: 22.34, category: "giftcard" },
+            { title: "Steam Gift Card $75", image: "https://cdn.gameseal.com/media/93/a7/aa/1725020956/Steam-Gift-Card-75-us.png", description: "Tarjeta Steam de $75 USD para comprar títulos AAA y DLCs.", tags: ["Steam", "PC"], price: 82.84, category: "giftcard" },
+            { title: "Steam Gift Card $100", image: "https://cdn.gameseal.com/media/82/90/96/1675850758/Steam%20gift%20card%20usd%20100.png", description: "Tarjeta Steam de $100 USD, ideal para grandes compras en Steam.", tags: ["Steam", "PC"], price: 110.34, category: "giftcard" }
+                ];
+
+                renderCatalog(giftcardData, 'giftcardCatalog', 'giftcard');
+
+        // ===== CATÁLOGO STREAMING =====
+        const streamingData = [
+            { title: "Netflix", image: "netflix_card.png", description: "Accede a miles de películas, series y documentales con la plataforma líder de streaming.", tags: ["Streaming", "Series", "Películas"], priceMes: 3.5, tipo: "normal", category: "streaming" },
+            { title: "Disney+", image: "disney_card.png", description: "Disfruta de Star Wars, Marvel, Pixar y todo el universo Disney en un solo lugar.", tags: ["Streaming", "Disney", "Marvel"], priceMes: 3.5, tipo: "normal", category: "streaming" },
+            { title: "Spotify Premium *cuenta*", image: "spotify_card.png", description: "Música ilimitada sin anuncios, descargas y audio de alta calidad.", tags: ["Música", "Premium", "Sin anuncios"], priceMes: 5, tipo: "spotify", category: "streaming" },
+            { title: "HBO Max", image: "hbo_card.png", description: "Grandes estrenos, HBO Originals y contenido exclusivo para toda la familia.", tags: ["Streaming", "HBO", "Estrenos"], priceMes: 5.2, tipo: "normal", category: "streaming" },
+            { title: "Crunchyroll", image: "crunchyroll_card.png", description: "Todo el anime que amas, subtitulado y doblado, disponible al instante.", tags: ["Anime", "Streaming", "Subs"], priceMes: 3.5, tipo: "normal", category: "streaming" },
+            { title: "YouTube Premium", image: "youtube_card.png", description: "Mira videos sin anuncios, reproduce en segundo plano y descarga contenidos.", tags: ["Videos", "Sin anuncios", "Premium"], priceMes: 7.5, tipo: "youtube", category: "streaming" },
+            { title: "Prime Video", image: "prime_card.png", description: "Miles de películas, series deportes y contenido exclusivo de Amazon.", tags: ["Streaming", "Amazon", "Exclusivos"], priceMes: 5.2, tipo: "normal", category: "streaming" },
+            { title: "Paramount+", image: "paramount_card.png", description: "Películas clásicas, estrenos y contenido deportivo en una sola plataforma.", tags: ["Streaming", "Paramount", "Estrenos"], priceMes: 4, tipo: "normal", category: "streaming" },
+            { title: "Apple TV+", image: "appletv_card.png", description: "Contenido original con producciones aclamadas por la crítica mundial.", tags: ["Streaming", "Apple", "Original"], priceMes: 4, tipo: "normal", category: "streaming" }
+        ];
+
+        streamingData.forEach((platform, index) => {
+            const cardEl = document.createElement('article');
+            cardEl.className = 'steam-card';
+            const tipo = platform.tipo || 'normal';
+
+            const pantallasSelect = (tipo === 'normal') ? `
+                                <label>Pantallas
+                                    <select id="pantallas_${index}" class="streaming-select" data-streaming-index="${index}">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                    </select>
+                                </label>` : '';
+
+            const cuentaSelect = (tipo === 'spotify') ? `
+                                <label>Cuenta
+                                    <select id="cuenta_${index}" class="streaming-select" data-streaming-index="${index}">
+                                        <option value="Cuenta nueva">Cuenta nueva</option>
+                                        <option value="Renovación">Renovación</option>
+                                    </select>
+                                </label>` : '';
+
+            const mesesOptions = (tipo === 'youtube')
+                ? `<option value="1">1 mes</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="4">4 meses</option>`
+                : `<option value="1">1 mes</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option>`;
+
+            const mesesSelect = `
+                                <label>Meses
+                                    <select id="meses_${index}" class="streaming-select" data-streaming-index="${index}">
+                                        ${mesesOptions}
+                                    </select>
+                                </label>`;
+
+            cardEl.innerHTML = `
+                <div class="steam-card-image-wrap">
+                    <img src="${platform.image}" alt="${platform.title}" loading="lazy" decoding="async">
+                    <div class="steam-overlay">
+                        <div class="steam-overlay-header">
+                            <h3>${platform.title}</h3>
+                        </div>
+                        <p class="steam-overlay-desc">${platform.description}</p>
+                        <div class="steam-tags">
+                            ${platform.tags.map(tag => `<span class="steam-tag">${tag}</span>`).join('')}
+                        </div>
+                        <div class="steam-overlay-footer streaming-footer">
+                            <div class="streaming-options">
+                                ${pantallasSelect}
+                                ${cuentaSelect}
+                                ${mesesSelect}
+                            </div>
+                            <div class="streaming-total">
+                                <span>Total:</span>
+                                <span id="precio_${index}" class="streaming-total-price"></span>
+                            </div>
+                            <button class="btn-add-cart" data-streaming-index="${index}">🛒 Añadir al carrito</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="steam-card-meta">
+                    <h3>${platform.title}</h3>
+                    <p class="steam-price">Desde $${platform.priceMes.toFixed(2)} /mes</p>
+                </div>
+            `;
+            document.getElementById('streamingCatalog').appendChild(cardEl);
+            actualizarPrecioStreaming(index);
+        });
+
+        // ===== FUNCIONES DE PRECIO STREAMING =====
+        function leerPantallasStreaming(index) {
+            const el = document.getElementById('pantallas_' + index);
+            return el ? parseInt(el.value, 10) : 1;
+        }
+        function leerCuentaStreaming(index) {
+            const el = document.getElementById('cuenta_' + index);
+            return el ? el.value : '';
+        }
+        function leerMesesStreaming(index) {
+            const el = document.getElementById('meses_' + index);
+            return el ? parseInt(el.value, 10) : 1;
+        }
+        function calcularPrecioStreaming(index) {
+            const platform = streamingData[index];
+            const tipo = platform.tipo || 'normal';
+            const pantallas = (tipo === 'normal') ? leerPantallasStreaming(index) : 1;
+            const meses = leerMesesStreaming(index);
+            let total = pantallas * meses * platform.priceMes;
+            // 10% de descuento si pantallas >= 5 o meses >= 6
+            if (pantallas >= 5 || meses >= 6) {
+                total *= 0.9;
+            }
+            return Math.round(total * 100) / 100;
+        }
+        function actualizarPrecioStreaming(index) {
+            const el = document.getElementById('precio_' + index);
+            if (el) el.textContent = '$' + calcularPrecioStreaming(index).toFixed(2);
+        }
+                function agregarStreaming(index) {
+            const platform = streamingData[index];
+            const tipo = platform.tipo || 'normal';
+            const pantallas = (tipo === 'normal') ? leerPantallasStreaming(index) : 1;
+            const meses = leerMesesStreaming(index);
+            const cuenta = (tipo === 'spotify') ? leerCuentaStreaming(index) : '';
+            const precio = calcularPrecioStreaming(index);
+            agregarAlCarrito({
+                titulo: platform.title,
+                imagen: platform.image,
+                precio: precio,
+                categoria: 'streaming',
+                pantallas: pantallas,
+                meses: meses,
+                cuenta: cuenta,
+                tipo: tipo
+            });
+        }
+
+        // ===== CATÁLOGO OTROS PROGRAMAS =====
+        const otrosData = [
+            { title: "Windows 10 Pro", image: "windows10pro_card.png", description: "Licencia digital de Windows 10 Pro con clave de activación original global.", tags: ["Software", "Microsoft", "GLOBAL"], price: 11.79, category: "programas" },
+            { title: "Windows 10 Home", image: "windows10home_card.png", description: "Sistema operativo Windows 10 Home con clave de activación internacional.", tags: ["Software", "Microsoft", "GLOBAL"], price: 8.60, category: "programas" },
+            { title: "Windows 11 Home", image: "windows11home_card.png", description: "La última versión de Windows para tu PC con clave de activación global.", tags: ["Software", "Microsoft", "GLOBAL"], price: 21.08, category: "programas" },
+            { title: "Windows 11 Home OEM", image: "windows11home_oem_card.png", description: "Windows 11 Home OEM listo para instalar en equipos nuevos o ensamblados.", tags: ["Software", "Microsoft", "OEM"], price: 23.66, category: "programas" },
+            { title: "Windows 11 Pro + Office", image: "windows11office_card.png", description: "Bundle de Windows 11 Pro junto con Microsoft Office en una sola compra.", tags: ["Bundle", "Windows", "Office"], price: 38.46, category: "programas" },
+            { title: "Office Professional 2019 Plus", image: "office2019_card.png", description: "Suite ofimática completa con Word, Excel y PowerPoint y clave original.", tags: ["Office", "Microsoft", "Oficina"], price: 15.60, category: "programas" },
+            { title: "Office Professional Plus 2021", image: "office2021_card.png", description: "La versión más completa de Office con todas las aplicaciones profesionales.", tags: ["Office", "Microsoft", "Oficina"], price: 18.88, category: "programas" },
+            { title: "Office LTSC Professional Plus 2024", image: "office2024_card.png", description: "Office 2024 LTSC con soporte extendido y todas las aplicaciones de productividad.", tags: ["Office", "Microsoft", "LTSC"], price: 17.50, category: "programas" },
+            { title: "Google AI Gemini Pro", image: "gemini_card.png", description: "Suscripción de 12 meses al asistente de IA Gemini Pro con acceso avanzado.", tags: ["IA", "Google", "Suscripción"], price: 10.53, category: "programas" },
+            { title: "Claude AI Pro", image: "claude_card.png", description: "Acceso de 1 mes a Claude Pro para crear archivos, ejecutar código y más.", tags: ["IA", "Claude", "Suscripción"], price: 33.15, category: "programas" },
+            { title: "ChatGPT Plus", image: "chatgpt_card.png", description: "Cuenta ChatGPT Plus por 1 mes con razonamiento avanzado y creación de imágenes.", tags: ["IA", "OpenAI", "Suscripción"], price: 24.56, category: "programas" },
+            { title: "NordVPN Basic", image: "nordvpn_card.png", description: "Protege tu privacidad en PC, Android y más. Suscripción mensual de NordVPN.", tags: ["VPN", "Privacidad", "Seguridad"], price: 5.64, category: "programas" },
+            { title: "ExpressVPN", image: "expressvpn_card.png", description: "VPN de alta velocidad para PC y Mac. 1 dispositivo por 1 mes.", tags: ["VPN", "Rápido", "Seguridad"], price: 3.36, category: "programas" },
+            { title: "Avast SecureLine VPN", image: "avast_card.png", description: "Navega de forma anónima y segura. 1 dispositivo por 1 año.", tags: ["VPN", "Avast", "Seguridad"], price: 7.70, category: "programas" },
+            { title: "CyberGhost VPN", image: "cyberghost_card.png", description: "Acceso a servidores en todo el mundo. 7 dispositivos por 1 año.", tags: ["VPN", "Multi-dispositivo", "Seguridad"], price: 36.11, category: "programas" },
+            { title: "HMA! Pro VPN", image: "hma_card.png", description: "VPN confiable para una conexión segura y privada. Suscripción mensual.", tags: ["VPN", "HMA", "Seguridad"], price: 2.59, category: "programas" },
+            { title: "Surfshark VPN", image: "surfshark_card.png", description: "VPN ilimitada con protección de datos. Plan Starter por 1 año.", tags: ["VPN", "Surfshark", "Seguridad"], price: 57.06, category: "programas" },
+            { title: "Minecraft (Microsoft Store)", image: "minecraft_card.png", description: "Key de Minecraft para Microsoft Store, la clave original para activar y disfrutar el juego de construcción más famoso en tu PC.", tags: ["Minecraft", "Microsoft Store", "Clave"], price: 21.00, category: "programas" }
+        ];
+
+        renderCatalog(otrosData, 'otrosProgramasCatalog', 'programas');
+
+        // ===== CARRITO / TIENDA =====
+                const TASA_CAMBIO = 967.35; // MODIFICA ESTE VALOR para cambiar la tasa
+        let tasa = TASA_CAMBIO;
+        let carrito = leerJSON('carrito', []);
+
+        /*
+         * agregarAlCarrito — accepts an options object instead of 8 positional params.
+         * @param {Object} opts  titulo, imagen, precio, categoria (required)
+         *                       pantallas, meses, cuenta, tipo   (optional — streaming only)
+         */
+        function agregarAlCarrito(opts) {
+            opts = Object.assign({
+                titulo: '', imagen: '', precio: 0, categoria: '',
+                pantallas: 1, meses: 1, cuenta: '', tipo: ''
+            }, opts);
+
+            const item = {
+                titulo: opts.titulo, imagen: opts.imagen, precio: opts.precio,
+                categoria: opts.categoria, cantidad: 1,
+                pantallas: opts.pantallas, meses: opts.meses,
+                cuenta: opts.cuenta, tipo: opts.tipo
+            };
+            const clave = [opts.titulo, opts.pantallas, opts.meses, opts.cuenta, opts.tipo].join('|');
+            const existente = carrito.find(function (i) {
+                return [i.titulo, i.pantallas || 1, i.meses || 1, i.cuenta || '', i.tipo || ''].join('|') === clave;
+            });
+            if (existente) {
+                existente.cantidad++;
+            } else {
+                carrito.push(item);
+            }
+            escribirJSON('carrito', carrito);
+            actualizarContadorCarrito();
+
+            let detalle = '';
+            if (opts.categoria === 'streaming') {
+                const partes = [];
+                if (opts.tipo === 'spotify') partes.push(opts.cuenta);
+                else if (opts.tipo === 'normal') partes.push(opts.pantallas + ' pantalla' + (opts.pantallas > 1 ? 's' : ''));
+                partes.push(opts.meses + ' mes' + (opts.meses > 1 ? 'es' : ''));
+                detalle = ' (' + partes.join(', ') + ')';
+            }
+            mostrarToast('✅ ' + opts.titulo + detalle + ' añadido al carrito', 'success');
+        }
+
+        function actualizarContadorCarrito() {
+            const total = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+            document.getElementById('cartCount').textContent = total;
+            document.getElementById('cartHeaderCount').textContent = '(' + total + (total === 1 ? ' producto)' : ' productos)');
+        }
+
+        function abrirCarrito() {
+            document.getElementById('cartOverlay').classList.add('open');
+            mostrarCarrito();
+        }
+
+        function cerrarCarrito() {
+            document.getElementById('cartOverlay').classList.remove('open');
+        }
+
+        function formatearVariante(item) {
+            if (item.categoria !== 'streaming') return '';
+            const partes = [];
+            if (item.tipo === 'spotify') {
+                partes.push(item.cuenta || 'Cuenta');
+            } else if (item.tipo === 'normal' && item.pantallas) {
+                partes.push(item.pantallas + ' pantalla' + (item.pantallas > 1 ? 's' : ''));
+            }
+            partes.push(item.meses + ' mes' + (item.meses > 1 ? 'es' : ''));
+            return partes.join(' · ');
+        }
+
+        function mostrarCarrito() {
+            const container = document.getElementById('cartItems');
+            if (carrito.length === 0) {
+                container.innerHTML = '<p class="cart-empty">Tu carrito está vacío</p>';
+            } else {
+                container.innerHTML = carrito.map((item, index) => `
+                    <div class="cart-item">
+                        <img src="${item.imagen}" alt="${item.titulo}" class="cart-item-img" loading="lazy" decoding="async">
+                        <div class="cart-item-info">
+                            <h4>${item.titulo}</h4>
+                            ${item.categoria === 'streaming' ? `<p class="cart-item-variant">${formatearVariante(item)}</p>` : ''}
+                            <p class="cart-item-price">$${item.precio.toFixed(2)} USD</p>
+                            <div class="cart-qty">
+                                <button type="button" data-idx="${index}" data-delta="-1" class="qty-btn" aria-label="Restar">−</button>
+                                <span>${item.cantidad}</span>
+                                <button type="button" data-idx="${index}" data-delta="1" class="qty-btn" aria-label="Sumar">+</button>
+                            </div>
+                        </div>
+                        <button class="cart-remove" type="button" data-idx="${index}" aria-label="Eliminar">🗑️</button>
+                    </div>
+                `).join('');
+            }
+            actualizarTotalesCarrito();
+        }
+
+        function cambiarCantidad(index, delta) {
+            carrito[index].cantidad += delta;
+            if (carrito[index].cantidad <= 0) {
+                carrito.splice(index, 1);
+            }
+            localStorage.setItem('carrito', JSON.stringify(carrito));
+            mostrarCarrito();
+            actualizarContadorCarrito();
+        }
+
+        function eliminarItem(index) {
+            carrito.splice(index, 1);
+            localStorage.setItem('carrito', JSON.stringify(carrito));
+            mostrarCarrito();
+            actualizarContadorCarrito();
+        }
+
+        function actualizarTotalesCarrito() {
+            const totalUsd = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+            document.getElementById('cartTotalUsd').textContent = '$' + totalUsd.toFixed(2);
+            document.getElementById('cartTotalBs').textContent = 'Bs ' + (totalUsd * tasa).toFixed(2);
+        }
+
+        function finalizarCompra() {
+            if (carrito.length === 0) {
+                                mostrarToast('Tu carrito está vacío', 'warning');
+                return;
+            }
+            const totalUsd = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+            const totalBs = totalUsd * tasa;
+            const mensaje = 'Hola! Quiero comprar estos productos:\n\n' +
+                carrito.map(item => {
+                    const detalle = (item.categoria === 'streaming') ? ' (' + formatearVariante(item) + ')' : '';
+                    return '- ' + item.titulo + detalle + ' x' + item.cantidad + ' = $' + (item.precio * item.cantidad).toFixed(2);
+                }).join('\n') +
+                '\n\nTotal: $' + totalUsd.toFixed(2) + ' USD = Bs ' + totalBs.toFixed(2) + '\nTasa: ' + tasa;
+            const url = 'https://wa.me/?text=' + encodeURIComponent(mensaje);
+                    window.open(url, '_blank');
+        }
+
+        /* ===== Event delegation for catalog "Añadir al carrito" buttons ===== */
+        var catalogContainers = ['steamCatalog', 'giftcardCatalog', 'otrosProgramasCatalog'];
+        catalogContainers.forEach(function (id) {
+            var c = document.getElementById(id);
+            if (!c) return;
+            c.addEventListener('click', function (e) {
+                var btn = e.target.closest('.btn-add-cart');
+                if (!btn) return;
+                agregarAlCarrito({
+                    titulo: btn.getAttribute('data-title'),
+                    imagen: btn.getAttribute('data-image'),
+                    precio: Number(btn.getAttribute('data-price')),
+                    categoria: btn.getAttribute('data-category')
+                });
+            });
+        });
+
+        /* ===== Event delegation for streaming selects & add-to-cart ===== */
+        var streamingCatalogEl = document.getElementById('streamingCatalog');
+        if (streamingCatalogEl) {
+            streamingCatalogEl.addEventListener('change', function (e) {
+                var sel = e.target.closest('.streaming-select');
+                if (!sel) return;
+                actualizarPrecioStreaming(Number(sel.getAttribute('data-streaming-index')));
+            });
+            streamingCatalogEl.addEventListener('click', function (e) {
+                var btn = e.target.closest('.btn-add-cart[data-streaming-index]');
+                if (!btn) return;
+                agregarStreaming(Number(btn.getAttribute('data-streaming-index')));
+            });
+        }
+
+                /* ===== Event delegation for cart qty buttons & remove ===== */
+        var cartItemsEl = document.getElementById('cartItems');
+        if (cartItemsEl) {
+            cartItemsEl.addEventListener('click', function (e) {
+                var btn = e.target.closest('button[data-idx]');
+                if (!btn) return;
+                var idx = Number(btn.getAttribute('data-idx'));
+                if (btn.classList.contains('cart-remove')) {
+                    eliminarItem(idx);
+                } else {
+                    cambiarCantidad(idx, Number(btn.getAttribute('data-delta')));
+                }
+            });
+        }
+
+        /* ===== UI button event listeners (replacing inline onclick) ===== */
+        var openAuthBtn = document.getElementById('openAuthBtn');
+        if (openAuthBtn) openAuthBtn.addEventListener('click', abrirModalAuth);
+
+        var openCartBtn = document.getElementById('openCartBtn');
+        if (openCartBtn) openCartBtn.addEventListener('click', abrirCarrito);
+
+        var closeCartBtn = document.getElementById('closeCartBtn');
+        if (closeCartBtn) closeCartBtn.addEventListener('click', cerrarCarrito);
+
+        var cartOverlay = document.getElementById('cartOverlay');
+        if (cartOverlay) cartOverlay.addEventListener('click', function (e) {
+            if (e.target === cartOverlay) cerrarCarrito();
+        });
+
+        var checkoutBtn = document.getElementById('checkoutBtn');
+        if (checkoutBtn) checkoutBtn.addEventListener('click', finalizarCompra);
+
+        var closeAuthBtn = document.getElementById('closeAuthBtn');
+        if (closeAuthBtn) closeAuthBtn.addEventListener('click', cerrarModalAuth);
+
+        var authOverlay = document.getElementById('authOverlay');
+        if (authOverlay) authOverlay.addEventListener('click', function (e) {
+            if (e.target === authOverlay) cerrarModalAuth();
+        });
+
+        var authTabs = document.querySelectorAll('[data-tab]');
+        authTabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                mostrarPestana(tab.getAttribute('data-tab'));
+            });
+        });
+
+        var verifyBtn = document.getElementById('verifyBtn');
+        if (verifyBtn) verifyBtn.addEventListener('click', irAlLogin);
+
+        var resendBtn = document.getElementById('resendBtn');
+        if (resendBtn) resendBtn.addEventListener('click', reenviarCodigo);
+
+        var loginForm = document.getElementById('loginForm');
+        if (loginForm) loginForm.addEventListener('submit', iniciarSesion);
+
+        var registroForm = document.getElementById('registroForm');
+        if (registroForm) registroForm.addEventListener('submit', enviarCodigoRegistro);
+
+                /* ===== Cerrar carrito/auth con tecla ESC ===== */
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var authOpen = document.getElementById('authOverlay');
+                var cartOpen = document.getElementById('cartOverlay');
+                if (authOpen && authOpen.classList.contains('open')) cerrarModalAuth();
+                else if (cartOpen && cartOpen.classList.contains('open')) cerrarCarrito();
+            }
+        });
+
+        actualizarContadorCarrito();
+    </script>
+
+    <!-- Footer con enlaces legales -->
+    <footer class="main-footer">
+        <div class="footer-links">
+            <a href="privacidad.html">Política de Privacidad</a>
+            <a href="terminos.html">Términos y Condiciones</a>
+            <a href="cookies.html">Política de Cookies</a>
+        </div>
+        <p class="footer-copy">&copy; 2026 G&amp;S STORE — Jesús Varela.</p>
+    </footer>
+    <!-- Aviso de cookies: badge discreto + panel emergente (nunca aparece solo) -->
+    <div class="cookie-widget" id="cookieWidget">
+        <div class="cookie-popup" id="cookiePopup" role="dialog"
+             aria-modal="false" aria-labelledby="cookiePopupTitle" aria-hidden="true" tabindex="-1">
+            <p class="cookie-popup-title" id="cookiePopupTitle">🍪 Uso de cookies</p>
+            <p class="cookie-popup-text">Este sitio utiliza cookies propias y de terceros para mejorar tu experiencia de navegación. Consulta el detalle en nuestra política.</p>
+            <div class="cookie-popup-actions">
+                <a class="cookie-popup-link" href="cookies.html" id="cookiePopupLink">Ver Política de Cookies</a>
+                <button class="cookie-popup-btn" type="button" id="cookiePopupAccept">Entendido</button>
+            </div>
+        </div>
+        <button class="cookie-badge" type="button" id="cookieBadge" aria-label="Aviso de cookies"
+                aria-haspopup="dialog" aria-expanded="false" aria-controls="cookiePopup" title="Aviso de cookies">
+            <span aria-hidden="true">🍪</span>
+        </button>
+    </div>
+
+    <script>
+        /* ===== Aviso de cookies: badge fijo que abre un panel sólo si lo pulsas ===== */
+        (function () {
+            const CLAVE = 'indesx_cookies_ok';
+            const widget  = document.getElementById('cookieWidget');
+            const badge   = document.getElementById('cookieBadge');
+            const popup   = document.getElementById('cookiePopup');
+            const btnOk   = document.getElementById('cookiePopupAccept');
+            const enlace  = document.getElementById('cookiePopupLink');
+            if (!widget || !badge || !popup) return;
+
+            // DRY: un único punto de consulta para el estado abierto/cerrado.
+            function abierto() { return popup.classList.contains('open'); }
+
+            // En la primera visita se marca con un punto azul (sin abrir nada).
+            if (leerJSON(CLAVE, false) !== true) widget.classList.add('attn');
+
+            function abrir() {
+                popup.classList.add('open');
+                popup.setAttribute('aria-hidden', 'false');
+                popup.setAttribute('aria-modal', 'true');
+                badge.setAttribute('aria-expanded', 'true');
+                if (btnOk) btnOk.focus();   // foco al botón primario (teclado / lector de pantalla)
+            }
+            function cerrar() {
+                popup.classList.remove('open');
+                popup.setAttribute('aria-hidden', 'true');
+                popup.setAttribute('aria-modal', 'false');
+                badge.setAttribute('aria-expanded', 'false');
+                badge.focus();              // devolver el foco al disparador
+            }
+            function marcarVisto() {
+                widget.classList.remove('attn');
+                escribirJSON(CLAVE, true);
+            }
+
+            // El badge alterna el panel; stopPropagation evita que el clic se
+            // propague al manejador de "clic fuera" del documento.
+            badge.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (abierto()) { cerrar(); } else { abrir(); }
+            });
+
+            if (btnOk) {
+                btnOk.addEventListener('click', function () {
+                    marcarVisto();
+                    cerrar();
+                });
+            }
+
+            // Al ir a la política se da por visto (y se navega con normalidad).
+            if (enlace) enlace.addEventListener('click', marcarVisto);
+
+            // Cierre suave: clic fuera del widget. Nunca bloquea la página.
+            document.addEventListener('click', function (e) {
+                if (!abierto()) return;
+                if (!widget.contains(e.target)) cerrar();
+            });
+            // Cierre con teclado: ESC.
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && abierto()) cerrar();
+            });
+        })();
+    </script>
+
+
+</body>
+</html>
+
+

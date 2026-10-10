@@ -1,0 +1,32 @@
+# ===== INDESX 2 - archivos que NO deben publicarse en Cloudflare Pages =====
+# Cloudflare Pages publica TODO el contenido del repositorio, asi que los
+# scripts y capturas de trabajo no deben quedar versionados.
+
+# Scripts de desarrollo local
+*.ps1
+
+# Artefactos temporales y de prueba
+tmp_*
+_ck_*
+_cookie_*
+_persist_*
+_shot_*
+*.err.txt
+
+# Capturas de pantalla usadas solo como referencia de trabajo
+Captura de pantalla*
+small_Captura*
+
+# Sistema operativo / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+*.log
+
+# --- Notas y respaldos de trabajo ---
+notas_precios.txt
+referencia.jpg
+styles 1.css
+html.index 1.0.html
+index 1.html
+

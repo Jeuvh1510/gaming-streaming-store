@@ -1,0 +1,13 @@
+# ===== Cloudflare Pages: _redirects =====
+# Redirige rutas antiguas al inicio para que el dominio no devuelva 404
+# si alguien entra por un enlace viejo o por un resultado de Google.
+
+# Nombre anterior del archivo (con doble extension) y variantes
+/index.html.html    /   301
+/index              /   301
+/home               /   301
+
+# Extension opcional: /index -> /  y  /terminos -> /terminos.html
+/terminos     /terminos.html     200
+/privacidad   /privacidad.html   200
+/cookies      /cookies.html      200

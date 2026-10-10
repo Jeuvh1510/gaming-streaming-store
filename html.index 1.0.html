@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>html.index 1.0</title>
+    <link rel="stylesheet" href="styles 1.css">
+</head>
+
+<body>
+    <h1 class="texto-animado">Lo que quieres Aquí</h1>
+    <button id="titulillo" class="boton" type="button">Juegos 🎮</button>
+    <button id="raquitico" class="boton">presioname</button>
+    <img id="manola" class="imagen-oculta" src="https://i.ytimg.com/vi/iV244R5PUUo/maxresdefault.jpg" alt="manola">
+    <script>
+        const boton = document.getElementById("raquitico");
+        const imagen = document.getElementById("manola");
+        const botonRedirect = document.getElementById("titulillo");
+
+        boton.addEventListener("click", function() {
+            imagen.classList.toggle("imagen-oculta");
+        });
+
+        botonRedirect.addEventListener("click", function() {
+            window.location.href = "INDESX%202.html";
+        });
+    </script>
+</body>
+
+</html>
